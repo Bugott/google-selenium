@@ -1,28 +1,23 @@
-import xlrd
 import time
+from urllib.parse import urlparse
+import logging
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-import db_operation
+from db_operation import DBOperation
 import random
 from bs4 import BeautifulSoup
-import pymysql
 
 
 class SeleniumCompanyCrawler(object):
-    # 获取需要爬取的公司网址
-    def get_start_urls(self, file_path):
-        # 打开excel
-        excel = xlrd.open_workbook(file_path)
-        # 获取工作表
-        table = excel.sheet_by_index(1)  # 通过索引顺序获取
-        rows = table.nrows
-        result = {}
-        for row in range(rows):
-            company_name = table.cell(row, 0).value
-            company_web_site = table.cell(row, 1).value
-            result[company_web_site] = company_name
-
-        return result
+    db_operation = DBOperation()
+    logger = logging.getLogger()  # 不加名称设置root logger
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s: - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S')
+    fh = logging.FileHandler('F://log.txt')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
 
     def isElementExistByXpath(self, driver, element):
         flag = True
@@ -45,11 +40,11 @@ class SeleniumCompanyCrawler(object):
             return flag
 
     # 分析单个公司的搜索结果
-    def operate_browser(self, company_web_site, company_name):
+    def operate_browser(self, company_web_site, company_id):
         chrome_options = Options()
-        # 设置无头浏览器
-        # chrome_options.add_argument('--headless')
         chrome_options.add_argument('lang=zh_CN.UTF-8')
+        # chrome_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+        # chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
         USER_AGENTS = [
             "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; AcooBrowser; .NET CLR 1.1.4322; .NET CLR 2.0.50727)",
             "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; Acoo Browser; SLCC1; .NET CLR 2.0.50727; Media Center PC 5.0; .NET CLR 3.0.04506)",
@@ -69,6 +64,7 @@ class SeleniumCompanyCrawler(object):
             "Opera/9.80 (Macintosh; Intel Mac OS X 10.6.8; U; fr) Presto/2.9.168 Version/11.52",
         ]
         chrome_options.add_argument("user_agent=" + random.choice(USER_AGENTS))
+        chrome_options.add_argument("--proxy-server=https://202.124.42.147:8080")
         driver = webdriver.Chrome(options=chrome_options)
         # 打开google主页
         driver.get("http://www.google.com")
@@ -77,37 +73,59 @@ class SeleniumCompanyCrawler(object):
         # 获取BeautifulSoup,用于后续的html节点分析
         search_box = driver.find_element_by_name('q')  # 取得搜索框,用name去获取DOM
         # 循环网址
-        search_box.send_keys('site:' + company_web_site + ' "大数据" OR "人工智能" OR "云计算" ')
+        search_box.send_keys('site:' + company_web_site + ' intitle:"大数据"|intitle:"人工智能"|intitle:"云计算" ')
         search_box.submit()  # 令 chrome 按下 submit按钮
         time.sleep(5)  # 缓冲3秒
-        statistics_result = {}
+        statistics_result = []
         while True:
             soup = BeautifulSoup(driver.page_source, "lxml")
             search_result = soup.find_all(class_="g")
             if not search_result:
-                print(search_result)
-                statistics_result[0] = 0
+                statistics_result.append((company_id, 0, 0, 0, 0, 0))
                 break
             for result in search_result:
+                title_str = str(result.find('h3'))
+                article_link = str(result.find('a')['href'])
                 st_node = result.find(class_="st")
                 try:
-                    word_count = len(st_node.find('em'))
+                    big_data_word_count = title_str.count('大数据')
+                    ai_word_count = title_str.count('人工智能')
+                    cloud_compute_word_count = title_str.count('云计算')
+                    position_count = article_link.split(company_web_site)[1].count("/")
                     # 如果有时间参数,则加入统计
                     if st_node.find(class_="f") is not None:
                         article_time_text = st_node.find(class_="f")
                         article_year = int(article_time_text.text[0:4])
-                        if article_year in statistics_result.keys():
-                            statistics_result[article_year] += word_count
-                        else:
-                            statistics_result[article_year] = word_count
+                        if big_data_word_count != 0:
+                            statistics_result.append(
+                                (company_id, article_year, position_count, '大数据',
+                                 big_data_word_count, 1))
+                        if ai_word_count != 0:
+                            statistics_result.append(
+                                (company_id, article_year, position_count, '人工智能',
+                                 ai_word_count, 1))
+
+                        if cloud_compute_word_count != 0:
+                            statistics_result.append(
+                                (company_id, article_year, position_count, '云计算',
+                                 cloud_compute_word_count, 1))
                     # 没有时间参数，另外统计
                     else:
-                        if -1 in statistics_result.keys():
-                            statistics_result[-1] += word_count
-                        else:
-                            statistics_result[-1] = word_count
+                        if big_data_word_count != 0:
+                            statistics_result.append((company_id, -1, position_count, '大数据',
+                                                      big_data_word_count, 1))
+                        if ai_word_count != 0:
+                            statistics_result.append(
+                                (company_id, -1, position_count, '人工智能',
+                                 ai_word_count, 1))
+
+                        if cloud_compute_word_count != 0:
+                            statistics_result.append(
+                                (company_id, -1, position_count, '云计算',
+                                 cloud_compute_word_count, 1))
 
                 except Exception as e:
+                    logging.info("crawler website: " + company_web_site + " id: " + str(company_id) + "has exception")
                     print(e)
                     continue
             # 翻页按钮
@@ -118,63 +136,30 @@ class SeleniumCompanyCrawler(object):
                 time.sleep(5)
             else:
                 break
-        driver.close()
-        return CrawlerCompanyResult(statistics_result, company_web_site, company_name)
+        # driver.close()
+        try:
+            self.db_operation.batch_insert_records(statistics_result)
+        except Exception as e:
+            logging.info(statistics_result)
+            logging.info("insert records:has exception")
 
     # 批量获得结果
-    def get_statistics_results(self, company_info):
-        for company_web_site, company_name in company_info.items():
-            try:
-                print("current company name: " + company_name + " current company site:" + company_web_site)
-                result_of_one_company = SeleniumCompanyCrawler.operate_browser(self, company_web_site, company_name)
-            except Exception as e:
-                print("current website:" + company_web_site + "has exception" + e)
-                continue
-            for year, count in result_of_one_company.statistics_result.items():
-                current_result = (str(result_of_one_company.company_name),
-                                  str(result_of_one_company.company_web_site), year, count)
-                print(current_result)
-                result = []
-                result.append(current_result)
-                self.batch_insert_records(result)
-
-    def connect_db(self):
-        return pymysql.connect(host='47.106.199.194',
-                               port=3306,
-                               user='root',
-                               password='090448',
-                               database='graduation_project',
-                               charset='utf8')
-
-    def batch_insert_records(self, record):
-        con = self.connect_db()
-        cur = con.cursor()
-        try:
-            cur.executemany("INSERT INTO t_company_statistics (c_company_name, c_web_site, c_year,c_word_count)"
-                            + " VALUES(%s,%s,%s,%s)", record)
-            con.commit()
-        except Exception as e:
-            print(e)
-            print("write to db has exception")
-            con.rollback()
-        finally:
-            cur.close()
-            con.close()
-
-    def statistics(self):
-        compony_info = self.get_start_urls("F://company.xls")
-        statiscitcs_results = self.get_statistics_results(compony_info)
-
-
-# 定义每个公司的统计结果
-class CrawlerCompanyResult(object):
-
-    def __init__(self, statistics_result, company_web_site, company_name):
-        self.statistics_result = statistics_result
-        self.company_web_site = company_web_site
-        self.company_name = company_name
+    def get_statistics_results(self):
+        start = 0
+        page_size = 20
+        while True:
+            result = self.db_operation.get_company_info(start, page_size)
+            if not result:
+                break
+            else:
+                for r in result:
+                    parsed_uri = urlparse(r.company_web_site)
+                    domain = '{uri.netloc}'.format(uri=parsed_uri)
+                    self.operate_browser(domain, r.company_id)
+                start += page_size
 
 
 if __name__ == '__main__':
     s = SeleniumCompanyCrawler()
-    s.statistics()
+    s.operate_browser("www.bjzst.cn", 1095)
+    # s.get_statistics_results()
