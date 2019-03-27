@@ -17,7 +17,7 @@ class DBOperation(object):
         company_infos = []
         try:
             cur.execute(
-                'SELECT c_id,c_company_web_site FROM t_company_info WHERE c_company_web_site !="" AND `c_company_industry` IN ("软件-") AND c_id =789 ORDER BY c_id LIMIT ' + str(
+                'SELECT c_id,c_company_web_site FROM t_company_info WHERE c_company_web_site !=""  AND `c_company_industry` IN ("汽车零部件-") AND c_id =831 ORDER BY c_id  LIMIT ' + str(
                     start_index) + ',' + str(page_size))
             for row in cur.fetchall():
                 company_infos.append(CompanyInfo(row[0], row[1]))

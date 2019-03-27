@@ -42,8 +42,8 @@ class GoogleSearchResultTextCrawler(object):
 
     # 分析单个公司的搜索结果
     def operate_browser(self, company_web_site, company_id):
-        # random_ip = random.choice(crawler_constant.PROXIES)
-        # proxies = {'https': random_ip}
+        random_ip = random.choice(crawler_constant.PROXIES)
+        proxies = {'http': random_ip}
         random_ua = random.choice(crawler_constant.USER_AGENTS)
         headers = {
             'User-Agent': random_ua,
@@ -53,10 +53,10 @@ class GoogleSearchResultTextCrawler(object):
         statistics_result = []
         start = 0
         try:
-            # response = requests.get(
-            #     search_title_link + str(start), headers=headers, timeout=10, proxies=proxies).text
             response = requests.get(
-                search_title_link + str(start), headers=headers, timeout=10).text
+                search_title_link + str(start), headers=headers, timeout=10, proxies=proxies).text
+            # response = requests.get(
+            #     search_title_link + str(start), headers=headers, timeout=10).text
             html_result = self.statistics_html(response, company_id, company_web_site)
             if not html_result:
                 statistics_result.append([(company_id, 0, 0, 0, 0, 0)])
@@ -69,10 +69,10 @@ class GoogleSearchResultTextCrawler(object):
                     else:
                         sleep_time = random.randint(0, 2) + random.random()
                     time.sleep(sleep_time)
-                    # response_str = requests.get(
-                    #     search_title_link + str(start), headers=headers, timeout=10, proxies=proxies).text
                     response_str = requests.get(
-                        search_title_link + str(start), headers=headers, timeout=10).text
+                        search_title_link + str(start), headers=headers, timeout=10, proxies=proxies).text
+                    # response_str = requests.get(
+                    #     search_title_link + str(start), headers=headers, timeout=10).text
                     html_result_str = self.statistics_html(response_str, company_id, company_web_site)
                     if not html_result_str:
                         break
@@ -82,6 +82,7 @@ class GoogleSearchResultTextCrawler(object):
             for i in statistics_result:
                 for j in i:
                     insert_records.append(j)
+            logging.info("start insert company id: " + str(company_id) + "size: " + str(len(insert_records)))
             self.db_operation.batch_insert_records(insert_records)
         except Exception as e:
             logging.info(e)
@@ -90,7 +91,7 @@ class GoogleSearchResultTextCrawler(object):
     # 批量获得结果
     def get_statistics_results(self):
         start = 0
-        page_size = 20
+        page_size = 100
         return self.db_operation.get_company_info(start, page_size)
         # while True:
         #     result = self.db_operation.get_company_info(start, page_size)
@@ -141,18 +142,18 @@ class GoogleSearchResultTextCrawler(object):
                     ai_word_count = 0
                     cloud_compute_word_count = 0
                 if big_data_word_count != 0:
-                        statistics_result.append(
-                            (company_id, article_year, position_count, '大数据',
-                             big_data_word_count, 0))
+                    statistics_result.append(
+                        (company_id, article_year, position_count, '大数据',
+                         big_data_word_count, 0))
                 if ai_word_count != 0:
-                        statistics_result.append(
-                            (company_id, article_year, position_count, '人工智能',
-                             ai_word_count, 0))
+                    statistics_result.append(
+                        (company_id, article_year, position_count, '人工智能',
+                         ai_word_count, 0))
 
                 if cloud_compute_word_count != 0:
-                        statistics_result.append(
-                            (company_id, article_year, position_count, '云计算',
-                             cloud_compute_word_count, 0))
+                    statistics_result.append(
+                        (company_id, article_year, position_count, '云计算',
+                         cloud_compute_word_count, 0))
             except Exception as e:
                 logging.info(e)
                 logging.info("use beautifulsoup get html info has exception")

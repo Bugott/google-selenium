@@ -42,8 +42,8 @@ class GoogleSearchResultCrawler(object):
 
     # 分析单个公司的搜索结果
     def operate_browser(self, company_web_site, company_id):
-        # random_ip = random.choice(crawler_constant.PROXIES)
-        # proxies = {'https': random_ip}
+        random_ip = random.choice(crawler_constant.PROXIES)
+        proxies = {'http': random_ip}
         random_ua = random.choice(crawler_constant.USER_AGENTS)
         headers = {
             'User-Agent': random_ua,
@@ -53,10 +53,10 @@ class GoogleSearchResultCrawler(object):
         statistics_result = []
         start = 0
         try:
-            # response = requests.get(
-            #     search_title_link + str(start), headers=headers, timeout=10,proxies=proxies).text
             response = requests.get(
-                search_title_link + str(start), headers=headers, timeout=10).text
+                search_title_link + str(start), headers=headers, timeout=10,proxies=proxies).text
+            # response = requests.get(
+            #     search_title_link + str(start), headers=headers, timeout=10).text
             html_result = self.statistics_html(response, company_id, company_web_site)
             logging.info(html_result is None)
             if not html_result:
@@ -68,12 +68,12 @@ class GoogleSearchResultCrawler(object):
                     if start / crawler_constant.PAGE_SIZE > 5:
                         sleep_time = 10 + random.random()
                     else:
-                        sleep_time = random.randint(0, 2) + random.random()
+                        sleep_time = random.randint(0, 20) + random.random()
                     time.sleep(sleep_time)
-                    # response_str = requests.get(
-                    #     search_title_link + str(start), headers=headers, timeout=10,proxies=proxies).text
                     response_str = requests.get(
-                        search_title_link + str(start), headers=headers, timeout=10).text
+                        search_title_link + str(start), headers=headers, timeout=10,proxies=proxies).text
+                    # response_str = requests.get(
+                    #     search_title_link + str(start), headers=headers, timeout=10).text
                     html_result_str = self.statistics_html(response_str, company_id, company_web_site)
                     if not html_result_str:
                         break
@@ -83,6 +83,7 @@ class GoogleSearchResultCrawler(object):
             for i in statistics_result:
                 for j in i:
                     insert_records.append(j)
+            logging.info("start insert company id: " + str(company_id) + "size: " + str(len(insert_records)))
             self.db_operation.batch_insert_records(insert_records)
         except Exception as e:
             logging.info(e)
